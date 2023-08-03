@@ -127,21 +127,21 @@ set用于定义变量，之后使用\${}方式取得变量中的值
 
 主要包含三种信息：
 
-*   SEND\_ERROR，产生错误，生成过程被跳过。
+*   SEND_ERROR，产生错误，生成过程被跳过。
 *   SATUS，输出前缀为-的信息。
-*   FATAL\_ERROR，立即终止所有 cmake 过程.
+*   FATAL_ERROR，立即终止所有 cmake 过程.
 
-### add\_executable
+### add_executable
 
 生成可执行文件
 
-### add\_subdirectory
+### add_subdirectory
 
 `ADD_SUBDIRECTORY(source_dir [binary_dir] [EXCLUDE_FROM_ALL])`
 
 *   这个指令用于向当前工程添加存放源文件的子目录，并可以指定中间二进制和目标二进制存放的位置
-*   EXCLUDE\_FROM\_ALL函数是将写的目录从编译中排除，如程序中的example
-*   ADD\_SUBDIRECTORY(src bin)
+*   EXCLUDE_FROM_ALL函数是将写的目录从编译中排除，如程序中的example
+*   ADD_SUBDIRECTORY(src bin)
 
     将 src 子目录加入工程并指定编译输出(包含编译中间结果)路径为bin 目录
 
@@ -151,7 +151,7 @@ set用于定义变量，之后使用\${}方式取得变量中的值
 
 用于控制编译流程，类似宏定义`option(<variable> "<help_text>" [value])`
 
-### add\_definitions
+### add_definitions
 
 类似于`#define`，可以转换为C中的define
 
@@ -267,12 +267,12 @@ endfunction([<name>])
 
 > 注意：调用function时，传入参数不能小于定义函数时规定的参数，但可以大于规定的参数数量，此时会只保留前几个
 
-### add\_custom\_target
+### add_custom_target
 
 CMake中一切都是基于target的，如`add_library`会产生一个library的target，`add_executable`会产生一个exe的target等。`add_custom_target`会根据命令的参数生成一个target，这个target相对的可以更定制化一点。
 如果`add_custom_target`只有一个参数，那么会将该参数视为要运行的命令
 
-### add\_dependencies
+### add_dependencies
 
 [链接](https://blog.csdn.net/BeanGuohui/article/details/120217097)
 
