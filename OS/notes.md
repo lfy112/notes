@@ -83,3 +83,173 @@
 2. 读写锁：能够明确区分读写操作时使用。读锁是共享锁，写锁是独占锁。
 
 3. 乐观锁和悲观锁：悲观锁：访问资源前先加锁；乐观锁：不加锁，如果发生冲突就放弃本次操作
+
+## 进程调度
+
+* 先来先服务
+
+* 最短作业优先
+
+* 高相应比优先
+
+  ![](./imgs/26-响应比公式.webp)
+
+* 时间片轮转
+
+* 最高优先级优先
+
+* 多级反馈队列
+
+## 页面置换
+
+* 最佳页面置换，**置换在「未来」最长时间不访问的页面**。
+* 先进先出
+* 最近最久未使用（LRU）
+* 时钟页面置换
+* 最不常用（LFU）
+
+## 零拷贝
+
+mmap()减少从缓冲区到内存空间的拷贝（直接共享）
+
+- 应用进程调用了 `mmap()` 后，DMA 会把磁盘的数据拷贝到内核的缓冲区里。接着，应用进程跟操作系统内核「共享」这个缓冲区；
+- 应用进程再调用 `write()`，操作系统直接将内核缓冲区的数据拷贝到 socket 缓冲区中，这一切都发生在内核态，由 CPU 来搬运数据；
+- 最后，把内核的 socket 缓冲区里的数据，拷贝到网卡的缓冲区里，这个过程是由 DMA 搬运的。
+
+sendfile()：操作系统内核会从源文件中读取数据，然后将数据直接传输到目标文件描述符所关联的位置，而不需要将数据从内核复制到用户空间，再从用户空间复制到目标文件描述符。这是一种零拷贝技术，因为数据只在内核空间中移动，不涉及用户空间。
+
+## socket
+
+### 基础模型
+
+![](./imgs/tcp_socket.webp)
+
+在 TCP 连接的过程中，服务器的内核实际上为每个 Socket 维护了两个队列：
+
+- 一个是「还没完全建立」连接的队列，称为 **TCP 半连接队列**，这个队列都是没有完成三次握手的连接，此时服务端处于 `syn_rcvd` 的状态；
+- 一个是「已经建立」连接的队列，称为 **TCP 全连接队列**，这个队列都是完成了三次握手的连接，此时服务端处于 `established` 状态；
+
+当 TCP 全连接队列不为空后，服务端的 `accept()` 函数，就会从内核中的 TCP 全连接队列里拿出一个已经完成连接的 Socket 返回应用程序，后续数据传输都用这个 Socket。
+
+注意，监听的 Socket 和真正用来传数据的 Socket 是两个：
+
+- 一个叫作**监听 Socket**；
+- 一个叫作**已连接 Socket**；
+
+### 多进程模型
+
+![](./imgs/多进程.webp)
+
+### 多线程模型
+
+![](./imgs/线程池.webp)
+
+## 多路复用
+
+### select/poll
+
+ select 这种方式，需要进行 **2 次「遍历」文件描述符集合**，一次是在内核态里，一个次是在用户态里 ，而且还会发生 **2 次「拷贝」文件描述符集合**，先从用户空间传入内核空间，由内核修改后，再传出到用户空间中。
+
+poll 不再用 BitsMap 来存储所关注的文件描述符，取而代之用动态数组，以链表形式来组织，突破了 select 的文件描述符个数限制
+
+select:
+
+``` c++
+int select(
+    int nfds,
+    fd_set *readfds,
+    fd_set *writefds,
+    fd_set *exceptfds,
+    struct timeval *timeout);
+// nfds:监控的文件描述符集里最大文件描述符加1
+// readfds：监控有读数据到达文件描述符集合，传入传出参数
+// writefds：监控写数据到达文件描述符集合，传入传出参数
+// exceptfds：监控异常发生达文件描述符集合, 传入传出参数
+// timeout：定时阻塞监控时间，3种情况
+//  1.NULL，永远等下去
+//  2.设置timeval，等待固定时间
+//  3.设置timeval里时间均为0，检查描述字后立即返回，轮询
+
+/* 
+* select服务端伪码
+* 首先一个线程不断接受客户端连接，并把socket文件描述符放到一个list里。
+*/
+while(1) {
+    connfd = accept(listenfd);
+    fcntl(connfd, F_SETFL, O_NONBLOCK);
+    fdlist.add(connfd);
+}
+/*
+* select函数还是返回刚刚提交的list，应用程序依然list所有的fd，只不过操作系统会将准备就绪的文件描述符做上标识，
+* 用户层将不会再有无意义的系统调用开销。
+*/
+struct timeval timeout;
+int max = 0;  // 用于记录最大的fd，在轮询中时刻更新即可
+// 初始化比特位
+FD_ZERO(&read_fd);
+while (1) {
+    // 阻塞获取 每次需要把fd从用户态拷贝到内核态
+    nfds = select(max + 1, &read_fd, &write_fd, NULL, &timeout);
+    // 每次需要遍历所有fd，判断有无读写事件发生
+    for (int i = 0; i <= max && nfds; ++i) {
+        // 只读已就绪的文件描述符，不用过多遍历
+        if (i == listenfd) {
+            // 这里处理accept事件
+            FD_SET(i, &read_fd);//将客户端socket加入到集合中
+        }
+        if (FD_ISSET(i, &read_fd)) {
+            // 这里处理read事件
+        }
+    }
+}
+```
+
+poll:
+
+``` c++
+int poll(struct pollfd *ufds, unsigned int nfds, int timeout);
+struct pollfd {
+    int fd;           /*文件描述符*/
+    short events;     /*监控的事件*/
+    short revents;    /*监控事件中满足条件返回的事件*/
+};
+int poll(struct pollfd *fds, nfds_tnfds, int timeout);
+
+// poll服务端实现伪码：
+    struct pollfd fds[POLL_LEN];
+unsigned int nfds=0;
+fds[0].fd=server_sockfd;
+fds[0].events=POLLIN|POLLPRI;
+nfds++;
+while {
+    res=poll(fds,nfds,-1);
+    if(fds[0].revents&(POLLIN|POLLPRI)) {
+        //执行accept并加入fds中，nfds++
+        if(--res<=0) continue
+    }
+    //循环之后的fds
+    if(fds[i].revents&(POLLIN|POLLERR )) {
+        //读操作或处理异常等
+        if(--res<=0) continue
+    }
+}
+```
+
+### epoll
+
+``` c++
+int s = socket(AF_INET, SOCK_STREAM, 0);
+bind(s, ...);
+listen(s, ...);
+
+int epfd = epoll_create(...);
+epoll_ctl(epfd, ...); //将所有需要监听的socket添加到epfd中
+
+while(1) {
+    int n = epoll_wait(...);
+    for(接收到数据的socket){
+        //处理
+    }
+}
+```
+
