@@ -191,3 +191,146 @@ int main(void)
 }
 ```
 
+## POD
+
+1. 使用默认的构造函数与析构函数
+2. 没有虚函数或虚基类
+3. 内存布局连续
+
+可以使用memcpy等内存操作的函数
+
+## 6个默认函数
+
+1. 无参构造函数：创建类对象
+2. 拷贝构造函数：拷贝类对象
+3. 移动构造函数：拷贝类对象
+4. 拷贝赋值函数：类对象赋值
+5. 移动赋值函数：类对象赋值
+6. 析构函数 ：销毁类对象
+
+## shared_ptr
+
+是线程安全的吗？
+
+* 通过引用计数管理对象时是线程安全的
+* 自身不是线程安全的，需要数据自身去保证安全，例如加锁或者原子操作
+
+## thread
+
+* join：主线程等待子线程结束
+* detach：在线程分离之后，主线程退出也会一并销毁创建出的所有子线程，在主线程退出之前，它可以脱离主线程继续独立的运行，任务执行完毕之后，这个子线程会自动释放自己占用的系统资源
+
+## call_once
+
+定义once_flag g_flag;
+
+call_once(g_flag, do_once);可以保证该函数只被调用一次
+
+## mutex
+
+* std::mutex：独占的互斥锁，不能递归使用
+* std::timed_mutex：带超时的独占互斥锁，不能递归使用
+* std::recursive_mutex：递归互斥锁，不带超时功能
+* std::recursive_timed_mutex：带超时的递归互斥锁
+
+## condition_variable
+
+``` c++
+mutex mtx;
+condition_variable cv;
+int cnt = 1;
+
+int main() {
+    auto func = [](int num) {
+        unique_lock<mutex> lock(mtx);
+        while(cnt!=num){
+            cv.wait(lock);
+        }
+        cout << num << endl;
+        cnt++;
+        cv.notify_all();
+    };
+    thread t1(func, 1);
+    thread t2(func, 2);
+    thread t3(func, 3);
+    thread t4(func, 4);
+
+    t1.join();
+    t2.join();
+    t3.join();
+    t4.join();
+    return 0;
+}
+```
+
+## atomic
+
+内存约束模型
+
+* `memory_order_relaxed`， 这是最宽松的规则，它对编译器和CPU不做任何限制，可以乱序
+* `memory_order_release` **释放**，设定内存屏障(Memory barrier)，保证它之前的操作永远在它之前，但是它后面的操作可能被重排到它前面
+* `memory_order_acquire` **获取**, 设定内存屏障，保证在它之后的访问永远在它之后，但是它之前的操作却有可能被重排到它后面，往往和Release在不同线程中联合使用
+* `memory_order_consume`：改进版的`memory_order_acquire` ，开销更小
+* `memory_order_acq_rel`，它是Acquire 和 Release 的结合，同时拥有它们俩提供的保证。比如你要对一个 atomic 自增 1，同时希望该操作之前和之后的读取或写入操作不会被重新排序
+* `memory_order_seq_cst` **顺序一致性**， `memory_order_seq_cst` 就像是memory_order_acq_rel的加强版，它不管原子操作是属于读取还是写入的操作，只要某个线程有用到`emory_order_seq_cst` 的原子操作，线程中该`memory_order_seq_cst` 操作前的数据操作绝对不会被重新排在该`memory_order_seq_cst` 操作之后，且该`memory_order_seq_cst` 操作后的数据操作也绝对不会被重新排在`memory_order_seq_cst` 操作前。
+
+## 多线程异步
+
+使用future和async
+
+```c++
+int funv(void){
+    return 100;
+} 
+std::future<int> result=std::async(std::launch::async, func); 
+std::cout<<result.get();
+```
+
+使用packaged_task包装任务
+
+```c++
+int add(int a, int b, int c) {    
+    std::cout << "call add\n";    
+    return a + b + c; 
+} 
+void do_other_things() {    
+    std::cout << "do_other_things" << std::endl; 
+} 
+int main() {    
+    std::packaged_task<int(int, int, int)> task(add); // 封装任务    
+    do_other_things();    
+    std::future<int> result = task.get_future();    
+    task(1, 1, 2); //必须要让任务执行，否则在get()获取future的值时会一直阻塞    
+    std::cout << "result:" << result.get() << std::endl;    
+    return 0; 
+}
+```
+
+promise：手动从子线程内发出一个结果。创建promise时，会获得一个future，持有promise的线程可以从这个future里面get到结果。
+
+在主线程中创建std::promise对象
+
+将这个std::promise对象通过引用的方式传递给子线程的任务函数
+
+在子线程任务函数中给std::promise对象赋值
+
+在主线程中通过std::promise对象取出绑定的future实例对象
+
+通过得到的future对象取出子线程任务函数中返回的值。
+
+``` c++
+void print(std::promise<std::string>& p) {  
+    p.set_value("There is the result whitch you want."); } 
+void do_some_other_things() { 
+    std::cout << "Hello World" << std::endl; 
+} 
+int main() {  
+    std::promise<std::string> promise;  
+    std::future<std::string> result = promise.get_future();   
+    std::thread th(print, std::ref(promise));   
+    do_some_other_things();  
+    std::cout << result.get() << std::endl;   
+    th.join();  
+    return 0; 
+}
+```
