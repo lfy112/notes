@@ -9,7 +9,7 @@ mysql架构：server层和存储引擎层
 * **Server 层负责建立连接、分析和执行 SQL**
 * **存储引擎层负责数据的存储和提取**
 
-连接sql服务：``mysql -u root -p`，基于TCP协议，需要进行三次握手。空闲超过`wait_timeout`后会自动断开连接。连接数量由`max_connections`控制。
+连接sql服务：`mysql -u root -p`，基于TCP协议，需要进行三次握手。空闲超过`wait_timeout`后会自动断开连接。连接数量由`max_connections`控制。
 
 步骤：
 
@@ -153,7 +153,41 @@ unlock tables
 
 ### 表级锁
 
-- 表锁；
+- 表锁: `lock tables xxx read/write`, `unlock tables`
 - 元数据锁（MDL）;
 - 意向锁；
 - AUTO-INC 锁；
+
+select 也是可以对记录加共享锁和独占锁的，具体方式如下：
+
+```sql
+//先在表上加上意向共享锁，然后对读取的记录加共享锁
+select ... lock in share mode;
+
+//先表上加上意向独占锁，然后对读取的记录加独占锁
+select ... for update;
+```
+
+**意向共享锁和意向独占锁是表级锁，不会和行级的共享锁和独占锁发生冲突，而且意向锁之间也不会发生冲突，只会和共享表锁（*lock tables ... read*）和独占表锁（*lock tables ... write*）发生冲突。**
+
+### 行级锁
+
+InnoDB 引擎是支持行级锁的，而 MyISAM 引擎并不支持行级锁。
+
+普通的 select 语句是不会对记录加锁的，因为它属于快照读。如果要在查询时对记录加行锁，可以使用下面这两个方式，这种查询会加锁的语句称为**锁定读**。
+
+```sql
+//对读取的记录加共享锁
+select ... lock in share mode;
+
+//对读取的记录加独占锁
+select ... for update;
+```
+
+上面这两条语句必须在一个事务中，**因为当事务提交了，锁就会被释放**，所以在使用这两条语句的时候，要加上 begin、start transaction 或者 set autocommit = 0。
+
+行级锁的类型主要有三类：
+
+- Record Lock，记录锁，也就是仅仅把一条记录锁上；
+- Gap Lock，间隙锁，锁定一个范围，但是不包含记录本身，解决幻读问题；
+- Next-Key Lock：临键锁，Record Lock + Gap Lock 的组合，锁定一个范围，并且锁定记录本身。
