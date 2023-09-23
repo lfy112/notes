@@ -154,8 +154,8 @@ unlock tables
 ### 表级锁
 
 - 表锁: `lock tables xxx read/write`, `unlock tables`
-- 元数据锁（MDL）;
-- 意向锁；
+- 元数据锁（MDL）;（表结构不变，增删改查时加MDL读锁，改表结构时加写锁）
+- 意向锁；A update对某一行上锁后，生成一个意向锁，B通过检查意向锁及其类型，判断能否加表锁
 - AUTO-INC 锁；
 
 select 也是可以对记录加共享锁和独占锁的，具体方式如下：
@@ -191,3 +191,5 @@ select ... for update;
 - Record Lock，记录锁，也就是仅仅把一条记录锁上；
 - Gap Lock，间隙锁，锁定一个范围，但是不包含记录本身，解决幻读问题；
 - Next-Key Lock：临键锁，Record Lock + Gap Lock 的组合，锁定一个范围，并且锁定记录本身。
+
+升级为表锁
